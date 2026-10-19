@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --bg: #f3f2ef;
+  --surface: #fffcf8;
+  --fg: #1c1b17;
+  --muted: #5c584f;
+  --subtle: #7d786e;
+  --line: #e3dfd6;
+  --accent: #1c1b17;
+  --accent-fg: #f6f4ef;
+  --danger: #8d2f2a;
+  --warn: #8a5a12;
+  --ok: #1d6b43;
+  --shadow: 0 16px 40px rgb(28 27 23 / 6%);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #10110f;
+  --surface: #191a16;
+  --fg: #f3f1ea;
+  --muted: #c2bbb0;
+  --subtle: #9a9488;
+  --line: #2e2f29;
+  --accent: #f3f1ea;
+  --accent-fg: #141311;
+  --danger: #f0b4ae;
+  --warn: #e4c48a;
+  --ok: #9dceb4;
+  --shadow: 0 16px 40px rgb(0 0 0 / 32%);
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--surface);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-border: var(--line);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-warn: var(--warn);
+  --color-ok: var(--ok);
+  --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    overflow-x: clip;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    text-rendering: optimizeLegibility;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--fg);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--fg) 16%, transparent);
+  }
+}
+
+@utility wrap-safe {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
