@@ -4,6 +4,7 @@ import { mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { skipUnlessTemplate } from "./template-files.mjs";
 import { promisify } from "node:util";
 import {
   authEnabledFromEnvValue,
@@ -90,10 +91,14 @@ test("only a divergence warns the smoke verdict", () => {
   }
 });
 
-test("the build side resolves the template's shipped app-env", () => {
-  assert.equal(buildAuthEnabled(projectRoot(), {}), false);
-  assert.equal(buildAuthEnabled(projectRoot(), { VITE_AUTH_ENABLED: "true" }), true);
-});
+test(
+  "the build side resolves the template's shipped app-env",
+  { skip: skipUnlessTemplate(".grok/app-env.json") },
+  () => {
+    assert.equal(buildAuthEnabled(projectRoot(), {}), false);
+    assert.equal(buildAuthEnabled(projectRoot(), { VITE_AUTH_ENABLED: "true" }), true);
+  },
+);
 
 test("the CLI reports rather than silently passing when run via a symlink", async () => {
   // A check whose exit code is the whole signal must never no-op to 0 because
