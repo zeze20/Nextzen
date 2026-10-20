@@ -2,7 +2,8 @@ import { detectCategory } from "./category.ts";
 import { buildDemoResult } from "./demo.ts";
 import { normalizeModelPayload } from "./normalize.ts";
 import { extractJson, systemPrompt, userPrompt } from "./prompt.ts";
-import { assessRisk } from "./risk.ts";
+import { applyQuality } from "./quality.ts";
+import { assessInput } from "./risk.ts";
 import { takeToken } from "./rate-limit.ts";
 import { SCHEMA_VERSION } from "./types.ts";
 import type {
@@ -85,7 +86,7 @@ function recordFrom(
     source,
     model,
     acknowledged: false,
-    result,
+    result: applyQuality(result, input.os),
   };
 }
 
@@ -154,8 +155,7 @@ export async function runGeneration(
       return { ok: false, code: "rate_limit", message: statusMessage(lang, "rate_limit") };
     }
   }
-  const floorText = `${input.title}\n${input.description}\n${input.projectContext}`;
-  const floor = assessRisk(floorText);
+  const floor = assessInput(input);
   const now = deps.now ?? (() => new Date().toISOString());
   if (floor.malware) {
     const result = buildDemoResult(input);
@@ -222,6 +222,9 @@ export async function runGeneration(
       return { ok: false, code: "invalid_output", message: statusMessage(lang, "invalid_output") };
     }
   }
-  const result = normalizeModelPayload(parsed, lang, floorText);
+  const result = normalizeModelPayload(parsed, lang, `${input.title}\n${input.description}`, {
+    contextText: input.projectContext,
+    targetOs: input.os,
+  });
   return { ok: true, record: recordFrom(input, result, "live", model, now) };
 }

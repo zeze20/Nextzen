@@ -1,4 +1,13 @@
+import { gapText, lintSeverity, lintText } from "./quality.ts";
 import type { TaskRecord } from "./types.ts";
+
+const SEVERITY_LABEL = { error: "HATA", warn: "UYARI", info: "NOT" } as const;
+
+function lintLines(codes: string[] | undefined): string[] {
+  return (codes ?? []).map(
+    (code) => `${SEVERITY_LABEL[lintSeverity(code)]}: ${lintText(code, "tr")}`,
+  );
+}
 
 export function slugify(input: string): string {
   const mapped = input
@@ -42,7 +51,16 @@ export function toTextExport(record: TaskRecord): string {
     ...r.plan.map((step, i) => `${i + 1}. ${step}`),
     "",
     "Komutlar:",
-    ...r.commands.map((c) => `# ${c.purpose} [${c.riskLevel}]\n${c.command}`),
+    ...r.commands.map((c) =>
+      [
+        `# ${c.purpose} [${c.riskLevel}]`,
+        c.command,
+        ...lintLines(c.lint).map((l) => `# ${l}`),
+      ].join("\n"),
+    ),
+    ...((r.gaps ?? []).length
+      ? ["", "Eksikler:", ...(r.gaps ?? []).map((g) => `- ${gapText(g, "tr")}`)]
+      : []),
   ];
   return lines.join("\n");
 }
@@ -55,7 +73,11 @@ export function toMarkdownExport(record: TaskRecord): string {
   const commands = r.commands
     .map(
       (c) =>
-        `### ${c.purpose}\n\n- OS: ${c.os}\n- Yetki: ${c.privilege}\n- Risk: ${c.riskLevel}\n- Etki: ${c.impact}\n- Geri alma: ${c.rollback}\n- Onay: ${c.approvalRequired ? "gerekli" : "gerekli değil"}\n\n\`\`\`\n${c.command}\n\`\`\``,
+        `### ${c.purpose}\n\n- OS: ${c.os}\n- Yetki: ${c.privilege}\n- Risk: ${c.riskLevel}\n- Etki: ${c.impact}\n- Geri alma: ${c.rollback}\n- Onay: ${c.approvalRequired ? "gerekli" : "gerekli değil"}\n\n\`\`\`\n${c.command}\n\`\`\`${lintLines(
+          c.lint,
+        )
+          .map((l) => `\n- Denetim — ${l}`)
+          .join("")}`,
     )
     .join("\n\n");
   return [
@@ -107,5 +129,8 @@ export function toMarkdownExport(record: TaskRecord): string {
     `## Geri alma`,
     "",
     ...r.rollbackPlan.map((s) => `- ${s}`),
+    ...((r.gaps ?? []).length
+      ? ["", `## Eksikler`, "", ...(r.gaps ?? []).map((g) => `- ${gapText(g, "tr")}`)]
+      : []),
   ].join("\n");
 }

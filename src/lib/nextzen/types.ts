@@ -66,6 +66,14 @@ export type RiskReason =
   | "git_write"
   | "migration"
   | "service_change"
+  | "remote_script"
+  | "power"
+  | "process_kill"
+  | "cloud_change"
+  | "system_write"
+  | "security_disable"
+  | "leaked_secret"
+  | "security_topic"
   | "malware";
 
 export interface CommandProposal {
@@ -77,6 +85,8 @@ export interface CommandProposal {
   impact: string;
   rollback: string;
   approvalRequired: boolean;
+  /** Deterministic check codes from quality.ts. Absent on records saved before this field existed. */
+  lint?: string[];
 }
 
 export interface Artifact {
@@ -84,6 +94,7 @@ export interface Artifact {
   filename: string;
   content: string;
   purpose: string;
+  lint?: string[];
 }
 
 export interface EnvVarNote {
@@ -115,6 +126,8 @@ export interface TaskResult {
   envVars: EnvVarNote[];
   disableSteps: string[];
   refused: boolean;
+  /** Completeness findings (missing validation, rollback, …). Absent on older records. */
+  gaps?: string[];
 }
 
 export type TaskSource = "live" | "demo" | "policy";

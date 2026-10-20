@@ -1,5 +1,5 @@
 import { detectCategory } from "./category.ts";
-import { assessRisk, maxRisk, reasonText } from "./risk.ts";
+import { assessInput, assessRisk, maxRisk, reasonText } from "./risk.ts";
 import type {
   Artifact,
   Category,
@@ -20,7 +20,7 @@ function line(lang: Lang, tr: string, en: string): string {
 
 export function buildDemoResult(input: TaskInput): TaskResult {
   const blob = `${input.title}\n${input.description}\n${input.projectContext}`;
-  const risk = assessRisk(blob);
+  const risk = assessInput(input);
   const category = detectCategory(blob, input.category);
   const lang = input.languagePref;
   if (risk.malware) return refusal(input, category, lang);
@@ -28,7 +28,9 @@ export function buildDemoResult(input: TaskInput): TaskResult {
   const riskyLines = blob
     .split("\n")
     .map((item) => item.trim())
-    .filter((item) => item.length > 0 && item.length < 400 && assessRisk(item).level === "high")
+    .filter(
+      (item) => item.length > 0 && item.length < 400 && assessRisk(item, "code").level === "high",
+    )
     .slice(0, 2);
   const commands = commandsFor(input, category, riskyLines);
   const level = commands.reduce((acc, command) => maxRisk(acc, command.riskLevel), risk.level);

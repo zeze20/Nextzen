@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
+import { isLocked } from "@/lib/nextzen/approval";
+import { gapText, lintSeverity, lintText } from "@/lib/nextzen/quality";
 import { exportBasename, toJsonExport, toMarkdownExport, toTextExport } from "@/lib/nextzen/export";
 import { useI18n, type MessageKey } from "@/lib/nextzen/i18n";
 import { downloadText } from "@/lib/nextzen/storage";
@@ -13,11 +15,14 @@ export function ResultView({
   record: TaskRecord;
   onAcknowledge: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [copied, setCopied] = useState(false);
+  const [understood, setUnderstood] = useState(false);
   const result = record.result;
+  const locked = isLocked(record);
 
   async function copyResult() {
+    if (locked) return;
     const text = toTextExport(record);
     try {
       await navigator.clipboard.writeText(text);
@@ -33,6 +38,7 @@ export function ResultView({
   }
 
   function download(kind: "md" | "json" | "txt") {
+    if (locked) return;
     const base = exportBasename(record);
     if (kind === "json") downloadText(`${base}.json`, toJsonExport(record), "application/json");
     if (kind === "md") downloadText(`${base}.md`, toMarkdownExport(record), "text/markdown");
@@ -103,14 +109,45 @@ export function ResultView({
           {record.acknowledged ? (
             <p className="text-sm font-medium">{t("result.approved")}</p>
           ) : (
-            <button
-              type="button"
-              onClick={onAcknowledge}
-              className="inline-flex min-h-11 items-center justify-center rounded-sm border border-foreground px-4 text-sm font-medium sm:w-fit"
-            >
-              {t("result.approve")}
-            </button>
+            <div className="grid gap-3">
+              <label className="flex min-h-11 items-start gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={understood}
+                  onChange={(event) => setUnderstood(event.target.checked)}
+                  className="mt-1 size-5 shrink-0"
+                />
+                <span>{t("result.understood")}</span>
+              </label>
+              <button
+                type="button"
+                onClick={onAcknowledge}
+                disabled={!understood}
+                className="inline-flex min-h-11 items-center justify-center rounded-sm border border-foreground px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 sm:w-fit"
+              >
+                {t("result.approve")}
+              </button>
+            </div>
           )}
+        </section>
+      ) : null}
+
+      {result.gaps?.length ? (
+        <section
+          className="grid gap-2 border border-warn/60 bg-card p-4"
+          aria-labelledby="gaps-title"
+        >
+          <h2 id="gaps-title" className="text-lg font-medium">
+            {t("result.gapsTitle")}
+          </h2>
+          <p className="text-sm text-muted">{t("result.gapsBody")}</p>
+          <ul className="grid gap-2 text-sm">
+            {result.gaps.map((gap) => (
+              <li key={gap} className="border-l border-warn pl-3 wrap-safe">
+                {gapText(gap, lang)}
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 
@@ -155,7 +192,10 @@ export function ResultView({
                   code={command.command}
                   copyLabel={t("result.copyCode")}
                   copiedLabel={t("result.copied")}
+                  locked={locked}
+                  lockedLabel={t("result.copyLocked")}
                 />
+                <LintList codes={command.lint} />
                 <p className="text-xs text-muted">{t("result.notExecuted")}</p>
               </li>
             ))}
@@ -180,7 +220,10 @@ export function ResultView({
                   code={artifact.content}
                   copyLabel={t("result.copyCode")}
                   copiedLabel={t("result.copied")}
+                  locked={locked}
+                  lockedLabel={t("result.copyLocked")}
                 />
+                <LintList codes={artifact.lint} />
               </li>
             ))}
           </ul>
@@ -213,11 +256,17 @@ export function ResultView({
       <ListSection title={t("result.rollback")} items={result.rollbackPlan} />
       <ListSection title={t("result.disable")} items={result.disableSteps} />
 
+      {locked ? (
+        <p className="border border-border bg-card px-3 py-3 text-sm" role="status">
+          {t("result.locked")}
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={copyResult}
-          className="inline-flex min-h-11 items-center gap-2 rounded-sm border border-border px-3 text-sm"
+          disabled={locked}
+          className="inline-flex min-h-11 items-center gap-2 rounded-sm border border-border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           {copied ? (
             <Check className="size-4" aria-hidden="true" />
@@ -229,21 +278,24 @@ export function ResultView({
         <button
           type="button"
           onClick={() => download("md")}
-          className="min-h-11 rounded-sm border border-border px-3 text-sm"
+          disabled={locked}
+          className="min-h-11 rounded-sm border border-border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("result.exportMd")}
         </button>
         <button
           type="button"
           onClick={() => download("json")}
-          className="min-h-11 rounded-sm border border-border px-3 text-sm"
+          disabled={locked}
+          className="min-h-11 rounded-sm border border-border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("result.exportJson")}
         </button>
         <button
           type="button"
           onClick={() => download("txt")}
-          className="min-h-11 rounded-sm border border-border px-3 text-sm"
+          disabled={locked}
+          className="min-h-11 rounded-sm border border-border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t("result.exportTxt")}
         </button>
@@ -252,6 +304,35 @@ export function ResultView({
         {copied ? t("result.copied") : ""}
       </p>
     </article>
+  );
+}
+
+function LintList({ codes }: { codes?: string[] }) {
+  const { t, lang } = useI18n();
+  if (!codes?.length) return null;
+  return (
+    <div className="grid gap-1 text-sm">
+      <p className="text-xs tracking-wide text-subtle uppercase">{t("result.checks")}</p>
+      <ul className="grid gap-1">
+        {codes.map((code) => {
+          const severity = lintSeverity(code);
+          return (
+            <li
+              key={code}
+              className={cn(
+                "border-l pl-3 wrap-safe",
+                severity === "error" && "border-danger",
+                severity === "warn" && "border-warn",
+                severity === "info" && "border-border text-muted",
+              )}
+            >
+              <span className="font-medium">{t(`result.lint.${severity}` as MessageKey)}: </span>
+              {lintText(code, lang)}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -350,11 +431,15 @@ export function CodeBlock({
   code,
   copyLabel,
   copiedLabel,
+  locked = false,
+  lockedLabel = "",
 }: {
   language: string;
   code: string;
   copyLabel: string;
   copiedLabel: string;
+  locked?: boolean;
+  lockedLabel?: string;
 }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -363,9 +448,11 @@ export function CodeBlock({
         <span className="font-mono uppercase">{language}</span>
         <button
           type="button"
-          className="inline-flex min-h-11 items-center gap-2 px-2"
-          aria-label={copyLabel}
+          className="inline-flex min-h-11 items-center gap-2 px-2 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={locked ? lockedLabel : copyLabel}
+          disabled={locked}
           onClick={async () => {
+            if (locked) return;
             try {
               await navigator.clipboard.writeText(code);
             } catch {
@@ -384,7 +471,7 @@ export function CodeBlock({
           ) : (
             <Copy className="size-4" aria-hidden="true" />
           )}
-          {copied ? copiedLabel : copyLabel}
+          {locked ? lockedLabel : copied ? copiedLabel : copyLabel}
         </button>
       </figcaption>
       <pre className="max-w-full overflow-x-auto p-3 text-sm leading-6">
