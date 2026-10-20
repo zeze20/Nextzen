@@ -1,10 +1,12 @@
-import { assessRisk, maxRisk, parseRiskLevel, reasonText } from "./risk.ts";
+import { applyQuality } from "./quality.ts";
+import { assessInput, assessRisk, maxRisk, parseRiskLevel, reasonText } from "./risk.ts";
 import { sanitizeList, sanitizeText } from "./sanitize.ts";
 import type {
   Artifact,
   CommandProposal,
   EnvVarNote,
   Lang,
+  OsTarget,
   Privilege,
   Reversible,
   RiskLevel,
@@ -57,7 +59,7 @@ function commandsOf(value: unknown): CommandProposal[] {
     const row = asRecord(item);
     const command = sanitizeText(row.command, 4000);
     if (!command) continue;
-    const scanned = assessRisk(command);
+    const scanned = assessRisk(command, "code");
     const stated = parseRiskLevel(row.riskLevel) ?? "low";
     const riskLevel = maxRisk(stated, scanned.level);
     const privilege = privilegeOf(row.privilege);
@@ -92,17 +94,31 @@ function envOf(value: unknown): EnvVarNote[] {
   return out;
 }
 
-export function normalizeModelPayload(raw: unknown, lang: Lang, floorText: string): TaskResult {
+export interface NormalizeOptions {
+  /** Pasted project context. Scanned as code, not as prose, so identifiers do not raise alarms. */
+  contextText?: string;
+  targetOs?: OsTarget;
+}
+
+export function normalizeModelPayload(
+  raw: unknown,
+  lang: Lang,
+  floorText: string,
+  options: NormalizeOptions = {},
+): TaskResult {
   const row = asRecord(raw);
-  const floor = assessRisk(floorText);
+  const floor = assessInput({
+    title: "",
+    description: floorText,
+    projectContext: options.contextText ?? "",
+  });
   const commandList = commandsOf(row.commands);
   const artifactList = artifactsOf(row.generatedArtifacts);
-  const blob = [
-    floorText,
+  const generated = [
     ...commandList.map((command) => command.command),
     ...artifactList.map((artifact) => artifact.content),
   ].join("\n");
-  const scanned = assessRisk(blob);
+  const scanned = assessRisk(generated, "code");
   const modelLevel = parseRiskLevel(row.riskLevel) ?? "low";
   const riskLevel = [
     floor.level,
@@ -113,7 +129,9 @@ export function normalizeModelPayload(raw: unknown, lang: Lang, floorText: strin
   const refused = row.refused === true || floor.malware;
   const approvalRequired =
     !refused && (riskLevel === "high" || commandList.some((c) => c.approvalRequired));
-  const reasonLines = scanned.reasons.map((reason) => reasonText(reason, lang));
+  const reasonLines = [...new Set([...floor.reasons, ...scanned.reasons])].map((reason) =>
+    reasonText(reason, lang),
+  );
   const summary =
     sanitizeText(row.summary, 2000) ||
     (lang === "en" ? "The model returned no summary." : "Model özet döndürmedi.");
@@ -124,7 +142,7 @@ export function normalizeModelPayload(raw: unknown, lang: Lang, floorText: strin
   const assumptions = sanitizeList(row.assumptions, 8, 500);
   const plan = sanitizeList(row.plan, 12, 500);
   const warnings = [...sanitizeList(row.warnings, 8, 500), ...reasonLines].slice(0, 12);
-  return {
+  const result: TaskResult = {
     summary,
     assumptions: assumptions.length ? assumptions : [fallbackGap],
     plan: plan.length ? plan : [fallbackGap],
@@ -151,4 +169,5 @@ export function normalizeModelPayload(raw: unknown, lang: Lang, floorText: strin
     disableSteps: sanitizeList(row.disableSteps, 8, 400),
     refused,
   };
+  return applyQuality(result, options.targetOs ?? "any");
 }
